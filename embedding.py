@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_community.vectorstores import Chroma
 from langchain_classic.storage import LocalFileStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_groq import ChatGroq
 from langchain_classic.retrievers.multi_vector import MultiVectorRetriever
 
 # 2. 🌟 新增：Reranker 的魔法组件 🌟
@@ -22,7 +23,7 @@ print("⚙️ 正在初始化 [双阶段] 法律检索系统...")
 
 # 1. 初始化 Embedding 模型 (保留你测试成功的模型)
 embedding_model = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-2-preview" 
+    model="gemini-embedding-2-preview" 
 )
 
 # 2. 连接 Chroma 数据库
@@ -62,7 +63,7 @@ if not cohere_api_key:
     print("⚠️ 警告：未找到 COHERE_API_KEY。请检查 .env 文件。")
 
 compressor = CohereRerank(
-    model="rerank-multilingual-v3.0", # 🌟 核心：专治大马双语法条 🌟
+    model="rerank-v4.0-pro", # 🌟 核心：专治大马双语法条 🌟
     cohere_api_key=cohere_api_key,
     top_n=5 # 🌟 核心：从刚才的 20 条里，精挑细选出得分最高的 5 条交给大模型
 )

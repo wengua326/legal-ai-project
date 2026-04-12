@@ -3,77 +3,118 @@ import uuid
 import pickle
 from dotenv import load_dotenv
 from langchain_core.documents import Document
+from tqdm import tqdm
 
-# 导入我们之前写好的模块
+load_dotenv()
+
+# 导入你的核心模块
 import chunking as ck
 import summary as sm
 import embedding as emb
 
-# 加载环境变量 (比如你的 API Key)
-load_dotenv()
-
 def build_database():
-    """
-    将生成的 Summary (存入 ChromaDB) 和原始 Chunk (存入 LocalFileStore) 绑定并入库。
-    """
-    print("🚀 开始构建/更新法律知识库...")
+    print("=========================================")
+    print("🚀 MyLegal 数据库构建程序 [终极健壮版]")
+    print("=========================================\n")
 
-    # 1. 检查是否有数据需要入库
-    # ck.chunks 是原始的文本块，sm.text_summaries 是对应的摘要
-    if not ck.chunks or not sm.text_summaries:
-        print("❌ 没有检测到需要入库的数据。请检查前置步骤！")
-        return
+    backup_file = "mylegal_backup_update_v2.pkl"
+    my_chunks = []
+    my_summaries = []
 
-    # 确保原始块和摘要的数量是一一对应的
-    if len(ck.chunks) != len(sm.text_summaries):
-        print("❌ 严重错误：Chunk 的数量与 Summary 的数量不匹配！")
-        return
-
-    print(f"📦 准备将 {len(ck.chunks)} 对[摘要-原文]存入数据库...")
-
-    # 2. 为每一对数据生成一个全球唯一的 ID (UUID)
-    # 这就像给每一本书发一个身份证号，ChromaDB 和 LocalFileStore 就靠这个号码相认
-    doc_ids = [str(uuid.uuid4()) for _ in ck.chunks]
-
-    # 3. 准备存入 ChromaDB 的数据 (摘要)
-    # 我们把 Summary 包装成 Document 对象，把刚才生成的 ID 和【来源文件名】塞进 metadata 里
-    summary_docs =[]
-    for i, summary_text in enumerate(sm.text_summaries):
-        # 从原始 chunk 中提取来源文件名 (我们在 chunking.py 里加的)
-        source_file = ck.chunks[i].metadata.get("source_document", "Unknown_Source")
+    # --- Step 1: 加载数据 (优先从备份加载) ---
+    if os.path.exists(backup_file):
+        print(f"📂 发现本地备份文件 '{backup_file}'，正在加载...")
+        try:
+            with open(backup_file, "rb") as f:
+                data = pickle.load(f)
+                my_chunks = data['chunks']
+                my_summaries = data['summaries']
+            print(f"✅ 加载成功！原始条数: {len(my_chunks)}")
+        except Exception as e:
+            print(f"❌ 备份文件读取失败: {e}")
+            return
+    else:
+        print("⚠️ 未检测到备份，开始全新的切块与 API 总结逻辑...")
+        my_chunks = ck.create_chunks_from_folder()
+        if not my_chunks:
+            print("❌ 未能成功读取 TXT 文件。")
+            return
+        my_summaries = sm.generate_summaries(my_chunks)
         
-        doc = Document(
-            page_content=summary_text,
-            metadata={
-                'doc_id': doc_ids[i],       # 绑定 ID
-                'source': source_file       # 绑定来源，告诉 AI 这是哪本法律！
-            }
-        )
-        summary_docs.append(doc)
+        # 实时保存备份
+        print("\n💾 正在保存备份文件以防万一...")
+        with open(backup_file, "wb") as f:
+            pickle.dump({'chunks': my_chunks, 'summaries': my_summaries}, f)
 
-    # 4. 执行入库：存入 ChromaDB (向量库)
-    print("⏳ 正在将摘要向量化并存入 ChromaDB...")
-    try:
-        emb.retriever.vectorstore.add_documents(summary_docs)
-    except Exception as e:
-        print(f"❌ ChromaDB 入库失败: {e}")
+    # --- Step 2: 数据清洗与体检 (防止 400 错误) ---
+    print(f"\n🩺 正在对数据进行入库前体检，剔除无效内容...")
+    
+    summary_docs = []
+    final_ids = []
+    final_chunks = []
+    
+    for i, summary_text in enumerate(my_summaries):
+        # 🌟 核心过滤：剔除 None, 空字符串, 全空格, 或 [Error Summary]
+        if summary_text and str(summary_text).strip() and summary_text != "[Error Summary]":
+            source_file = my_chunks[i].metadata.get("source_document", "Unknown_Source")
+            
+            # 生成这一对数据的唯一钥匙
+            u_id = str(uuid.uuid4())
+            
+            # 包装成 ChromaDB 认识的格式
+            doc = Document(
+                page_content=str(summary_text).strip(),
+                metadata={
+                    'doc_id': u_id,       
+                    'source': source_file       
+                }
+            )
+            summary_docs.append(doc)
+            final_ids.append(u_id)
+            final_chunks.append(my_chunks[i])
+            
+    skipped_count = len(my_chunks) - len(summary_docs)
+    print(f"✅ 体检完毕！")
+    if skipped_count > 0:
+        print(f"⚠️ 自动过滤了 {skipped_count} 条会导致报错的空摘要。")
+    print(f"📦 最终有效入库条数: {len(summary_docs)}")
+
+    # --- Step 3: 分批写入数据库 ---
+    if not summary_docs:
+        print("❌ 没有任何有效数据可以存入数据库。")
         return
 
-    # 5. 准备存入 LocalFileStore 的数据 (原始 Chunk)
-    # 因为原始 Chunk 可能很大，包含各种信息，LocalFileStore 要求存 Byte 格式，所以用 pickle 冻结它
-    print("⏳ 正在将原始法条存入本地文档库 (Docstore)...")
-    try:
-        # 将原始 Chunk 对象转换为 Byte
-        chunk_bytes = [pickle.dumps(chunk) for chunk in ck.chunks]
+    print("\n🚧 正在分批写入数据库 (ChromaDB & Docstore)...")
+    batch_size = 500  
+    total_len = len(summary_docs)
+    
+    
+
+    for i in tqdm(range(0, total_len, batch_size), desc="入库进度"):
+        end_idx = min(i + batch_size, total_len)
         
-        # 将 ID 和 Byte 数据打包成键值对 (zip)，并存入 Docstore (mset)
-        emb.retriever.docstore.mset(list(zip(doc_ids, chunk_bytes)))
-    except Exception as e:
-        print(f"❌ Docstore 入库失败: {e}")
-        return
+        curr_batch_docs = summary_docs[i:end_idx]
+        curr_batch_ids = final_ids[i:end_idx]
+        curr_batch_chunks = final_chunks[i:end_idx]
+        
+        try:
+            # 1. 存入向量库 (ChromaDB 会自动调用 Embedding API)
+            emb.vectorstore.add_documents(curr_batch_docs)
+            
+            # 2. 存入原始文档库 (Docstore)
+            batch_bytes = [pickle.dumps(c) for c in curr_batch_chunks]
+            emb.store.mset(list(zip(curr_batch_ids, batch_bytes)))
+            
+        except Exception as e:
+            print(f"\n❌ 在批次 {i} 到 {end_idx} 处写入失败: {e}")
+            print("💡 建议：如果持续报错，请尝试将 batch_size 调小到 100。")
+            return
 
-    print("🎉 数据库构建/更新成功！")
+    print("\n" + "="*40)
+    print("🎉 任务圆满完成！大马法律大脑构建成功！")
+    print(f"📁 向量库: ./chroma_db")
+    print(f"📁 原始库: ./docstore")
+    print("="*40)
 
-# 运行主程序
 if __name__ == "__main__":
     build_database()
