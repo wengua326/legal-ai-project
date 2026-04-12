@@ -1,0 +1,273 @@
+{
+  "project_calculations": {
+    "solicitors_remuneration_order_2023": {
+      "general_rules": {
+        "late_payment_interest_rate_per_annum": 0.08,
+        "max_discount_allowed_for_table_A": 0.25,
+        "miscellaneous_expenses_cap": 100
+      },
+      "first_schedule_sale_and_transfer": {
+        "table_A_standard_scale_fees": [
+          {
+            "tier_min": 0,
+            "tier_max": 500000,
+            "rate": 0.0125,
+            "min_fee": 500
+          },
+          {
+            "tier_min": 500000.01,
+            "tier_max": 7500000,
+            "rate": 0.01
+          },
+          {
+            "tier_min": 7500000.01,
+            "tier_max": null,
+            "rate_description": "Subject to negotiation",
+            "max_rate": 0.01
+          }
+        ],
+        "table_B_HDA_transactions": [
+          {
+            "tier_min": 0,
+            "tier_max": 50000,
+            "fixed_fee": 500
+          },
+          {
+            "tier_min": 50000.01,
+            "tier_max": 250000,
+            "percentage_of_table_A": 0.75,
+            "min_fee": 500
+          },
+          {
+            "tier_min": 250000.01,
+            "tier_max": 500000,
+            "percentage_of_table_A": 0.70
+          },
+          {
+            "tier_min": 500000.01,
+            "tier_max": 1000000,
+            "percentage_of_table_A": 0.65
+          },
+          {
+            "tier_min": 1000000.01,
+            "tier_max": null,
+            "percentage_of_table_A": 0.50
+          }
+        ],
+        "additional_fees": {
+          "negotiating_fee_max_rate": 0.03
+        }
+      },
+      "second_schedule_lease_and_tenancy": {
+        "lease": [
+          {
+            "monthly_rent_max": 10000,
+            "rate_of_monthly_rent": 0.60,
+            "min_fee": 1000
+          },
+          {
+            "monthly_rent_min": 10000.01,
+            "min_rate_of_monthly_rent": 0.30,
+            "max_rate_of_monthly_rent": 0.50
+          }
+        ],
+        "tenancy": [
+          {
+            "monthly_rent_max": 10000,
+            "rate_of_monthly_rent": 0.30,
+            "min_fee": 500
+          },
+          {
+            "monthly_rent_min": 10000.01,
+            "min_rate_of_monthly_rent": 0.15,
+            "max_rate_of_monthly_rent": 0.25
+          }
+        ],
+        "special_conditions": {
+          "bulk_standard_agreements_10_or_more_units": {
+            "multiplier": 0.50,
+            "applies_to": ["lessor", "landlord"]
+          }
+        }
+      },
+      "third_schedule_charges_and_financing": {
+        "table_A": "Same structure as first_schedule_sale_and_transfer.table_A_standard_scale_fees",
+        "table_B": "Same structure as first_schedule_sale_and_transfer.table_B_HDA_transactions",
+        "subsidiary_instruments": {
+          "standard_rate_of_principal_fee": 0.10,
+          "min_fee": 500,
+          "max_fee": 2000
+        },
+        "subsequent_subsidiary_instruments": {
+          "same_solicitor_max_rate_of_principal": 0.25,
+          "different_solicitor_max_rate_of_principal": 0.50
+        }
+      },
+      "fourth_schedule_discharge_and_reassignment": {
+        "discharge_of_charge": {
+          "first_title_or_charge": 400,
+          "each_additional_title_or_charge": 100
+        },
+        "deed_of_reassignment": {
+          "first_property": 500,
+          "each_additional_property": 100,
+          "revocation_of_power_of_attorney_additional_fee": 200
+        },
+        "split_preparation": {
+          "multiplier_per_solicitor": 0.50
+        }
+      },
+      "fifth_schedule_miscellaneous": {
+        "witnessing_execution": {
+          "first_copy": 100,
+          "subsequent_copy": 50
+        },
+        "witnessing_and_attestation_certificate": {
+          "first_copy": 200,
+          "subsequent_copy": 100
+        },
+        "real_property_gains_tax_forms": {
+          "CKHT_1A": 500,
+          "CKHT_1A_additional_party": 300,
+          "CKHT_2A": 400,
+          "CKHT_2A_additional_party": 300,
+          "CKHT_3": 200,
+          "CKHT_3_additional_party": 200,
+          "CKHT_502_per_vendor": 250
+        },
+        "consent_applications": [
+          { "value_max": 100000, "fee": 200 },
+          { "value_min": 100000.01, "value_max": 1000000, "fee": 500 },
+          { "value_min": 1000000.01, "fee": 3000, "consent_to_charge_only_cap": 500 }
+        ],
+        "caveats": {
+          "entry_private_caveat_first_title": 300,
+          "entry_private_caveat_additional_title": 100,
+          "withdrawal_private_caveat_first_title": 200,
+          "withdrawal_private_caveat_additional_title": 100,
+          "entry_trust_caveat_first_title": 500,
+          "entry_trust_caveat_additional_title": 100
+        }
+      },
+      "sixth_schedule_general_rules": {
+        "unissued_title_subsequent_transfer_charge": {
+          "same_solicitor_max_multiplier": 0.25,
+          "different_solicitor_max_multiplier": 0.50
+        },
+        "terminated_or_uncompleted_transaction": {
+          "max_multiplier": 0.50,
+          "substantially_performed_multiplier": 1.00
+        }
+      }
+    },
+    "tenancy_stamp_duty_2026": {
+      "rules": {
+        "exemption_rm2400": {
+          "status": "removed_as_of_jan_1_2026",
+          "exemption_amount": 0 
+        },
+        "base_unit_for_calculation": 250,
+        "rounding_rule": "round_up_to_nearest_250"
+      },
+      "rates_per_duration": [
+        {
+          "duration_min_years": 0,
+          "duration_max_years": 1,
+          "rate_per_base_unit": 1
+        },
+        {
+          "duration_min_years": 1.01,
+          "duration_max_years": 3,
+          "rate_per_base_unit": 3
+        },
+        {
+          "duration_min_years": 3.01,
+          "duration_max_years": 5,
+          "rate_per_base_unit": 5
+        },
+        {
+          "duration_min_years": 5.01,
+          "duration_max_years": null,
+          "description": "Exceeding 5 years or indefinite",
+          "rate_per_base_unit": 7
+        }
+      ],
+      "additional_copies": {
+        "flat_fee_per_extra_copy": 10
+      },
+      "late_stamping_penalties": [
+        {
+          "delay_max_months": 3,
+          "penalty_percentage": 0.10,
+          "min_penalty_amount": 50
+        },
+        {
+          "delay_min_months": 3.01,
+          "penalty_percentage": 0.20,
+          "min_penalty_amount": 100
+        }
+      ],
+      "calculation_formula_steps": {
+        "step_1": "annual_rental = monthly_rental * 12",
+        "step_2": "taxable_rental = annual_rental - exemption_amount (Note: exemption is 0 for 2026+)",
+        "step_3": "calculation_units = Math.ceil(taxable_rental / 250)",
+        "step_4": "base_stamp_duty = calculation_units * rate_per_base_unit",
+        "step_5": "total_stamp_duty = base_stamp_duty + (number_of_extra_copies * flat_fee_per_extra_copy)"
+      }
+    },
+    "tenancy_administration_fee": {
+      "tiers": [
+        {
+          "monthly_rental_max": 999.99,
+          "description": "Less than RM 1,000",
+          "admin_fee": 100
+        },
+        {
+          "monthly_rental_min": 1001,
+          "monthly_rental_max": 1999,
+          "admin_fee": 150
+        },
+        {
+          "monthly_rental_min": 2001,
+          "monthly_rental_max": 3000,
+          "admin_fee": 200
+        },
+        {
+          "monthly_rental_min": 3001,
+          "monthly_rental_max": 4000,
+          "admin_fee": 250
+        },
+        {
+          "monthly_rental_min": 4000.01,
+          "description": "Over RM 4,000",
+          "admin_fee": 300
+        }
+      ]
+    },
+    "employment_termination_benefits": {
+      "eligibility_tiers": [
+        {
+          "service_years_min": 0,
+          "service_years_max": 1.99,
+          "days_salary_per_year": 10
+        },
+        {
+          "service_years_min": 2,
+          "service_years_max": 4.99,
+          "days_salary_per_year": 15
+        },
+        {
+          "service_years_min": 5,
+          "service_years_max": null,
+          "days_salary_per_year": 20
+        }
+      ],
+      "calculation_rules": {
+        "daily_wage_formula": "(monthly_salary * 12) / 365",
+        "proration_rule": "Prorated over incomplete period of a year, following the nearest complete month",
+        "total_benefit_formula": "daily_wage * length_of_service_in_years * eligibility_days_per_year",
+        "payment_deadline_days_from_termination": 7
+      }
+    }
+  }
+}

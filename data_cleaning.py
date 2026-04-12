@@ -1,78 +1,84 @@
 import os
 import re
+import docx
 from pypdf import PdfReader
 
-# --- 1. 自动定位文件夹路径 ---
+# --- 1. 自动定位当前脚本所在的目录 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# 指向总文件夹
+
+# 💡 路径配置：修正为指向 Law_Act 文件夹下的子目录
 INPUT_FOLDER = os.path.join(BASE_DIR, 'Law_Act', 'rawpdf')
 OUTPUT_FOLDER = os.path.join(BASE_DIR, 'Law_Act', 'cleantxt')
 
 def clean_legal_text(raw_text):
     """
-    专门针对大马法律 PDF 的清洗逻辑
+    专门针对大马法律文本的清洗逻辑
     """
-    # 修复断句：将单换行变空格，保留双换行
     text = re.sub(r'(?<!\n)\n(?!\n)', ' ', raw_text)
-    # 清除页眉页脚和页码
     text = re.sub(r'^\s*(Laws of Malaysia|ACT \d+|[0-9]+)\s*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
     text = re.sub(r'-\s*\d+\s*-', '', text)
     text = re.sub(r'Page\s*\d+', '', text, flags=re.IGNORECASE)
-    # 清除乱码和多余空格
-    text = text.replace('\x0c', '')
+    text = text.replace('\x0c', '') 
+    text = text.replace('•', '-')   
     text = re.sub(r' +', ' ', text)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
-def process_all_pdfs_recursively():
+def process_all_files():
     """
-    深度扫描子文件夹，读取 PDF，清洗并保存
+    扫描 Law_Act/rawpdf 文件夹，同时处理 PDF 和 Word，保存到 Law_Act/cleantxt
     """
-    print(f"🔎 正在深度扫描目录: {INPUT_FOLDER}")
+    print(f"🚀 正在精准扫描: {INPUT_FOLDER}")
     
     if not os.path.exists(OUTPUT_FOLDER):
         os.makedirs(OUTPUT_FOLDER)
 
-    # 使用 os.walk 进行深度遍历
     found_any = False
+    
     for root, dirs, files in os.walk(INPUT_FOLDER):
         for filename in files:
+            full_text = ""
+            output_filename = ""
+            input_path = os.path.join(root, filename)
+            
             if filename.lower().endswith('.pdf'):
                 found_any = True
-                input_path = os.path.join(root, filename)
-                
-                # 获取子文件夹的名字 (比如 BM version)
-                subfolder_name = os.path.basename(root)
-                
-                # 构造输出文件名：[BM version] 原文件名.txt
-                output_filename = f"[{subfolder_name}] {filename.replace('.pdf', '.txt')}"
-                output_path = os.path.join(OUTPUT_FOLDER, output_filename)
-                
-                print(f"⏳ 发现 {subfolder_name} 中的文件: {filename}...")
-                
+                print(f"⏳ 正在榨取 PDF: {filename}...")
                 try:
                     reader = PdfReader(input_path)
-                    full_text = ""
                     for page in reader.pages:
-                        extracted = page.extract_text()
-                        if extracted:
-                            full_text += extracted + "\n\n"
-                    
-                    cleaned_text = clean_legal_text(full_text)
-                    
-                    with open(output_path, 'w', encoding='utf-8') as f:
-                        f.write(cleaned_text)
-                    print(f"✅ 已洗净: {output_filename}")
-                    
+                        page_text = page.extract_text()
+                        if page_text:
+                            full_text += page_text + "\n\n"
+                    output_filename = re.sub(r'\.pdf$', '.txt', filename, flags=re.IGNORECASE)
                 except Exception as e:
-                    print(f"❌ 处理失败 {filename}: {e}")
+                    print(f"❌ PDF 读取失败 {filename}: {e}")
+                    continue
+
+            elif filename.lower().endswith('.docx'):
+                found_any = True
+                print(f"⏳ 正在榨取 Word: {filename}...")
+                try:
+                    doc = docx.Document(input_path)
+                    for para in doc.paragraphs:
+                        full_text += para.text + "\n"
+                    output_filename = re.sub(r'\.docx$', '.txt', filename, flags=re.IGNORECASE)
+                except Exception as e:
+                    print(f"❌ Word 读取失败 {filename}: {e}")
+                    continue
+
+            if output_filename:
+                cleaned_data = clean_legal_text(full_text)
+                output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(cleaned_data)
+                print(f"✅ 已洗净: {output_filename}")
 
     if not found_any:
-        print(f"❗ 警告：在 {INPUT_FOLDER} 及其子文件夹中没找到任何 PDF！")
-        print(f"请检查路径下是否真的有文件。当前绝对路径: {os.path.abspath(INPUT_FOLDER)}")
+        print(f"❗ 错误：在 {INPUT_FOLDER} 没找到文件！")
+        print(f"请检查该路径下是否真的有 .pdf 或 .docx 文件。")
     else:
-        print(f"\n🎉 大功告成！干净的 TXT 已全部存入: {OUTPUT_FOLDER}")
+        print(f"\n🎉 清洗完成！请查看: {OUTPUT_FOLDER}")
 
 if __name__ == "__main__":
-    process_all_pdfs_recursively()
-
+    process_all_files()

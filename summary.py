@@ -1,18 +1,18 @@
-from langchain_groq import ChatGroq
+import os
+from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI, HarmCategory, HarmBlockThreshold
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_groq import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
-import chunking as ck  # 【保留】我们依然需要从这里拿到切好的 chunks
+from tqdm import tqdm  # 🌟 引入进度条神器
 
-# 1. 【改造一】只保留一个针对法律文本的 Prompt
-# 这个 Prompt 强调提取关键词，为向量检索做准备
+load_dotenv()
+
 LEGAL_SUMMARY_PROMPT = ChatPromptTemplate.from_template(
     """You are a highly intelligent AI paralegal. 
     Your task is to create a concise, highly searchable summary of the following legal text chunk.
-    
-    Focus on extracting the key legal concepts, actions, entities (e.g., 'employer', 'employee'), and any specific conditions or penalties mentioned.
-    This summary will be used for vector search, so it must be dense with keywords.
-    
-    DO NOT alter the legal meaning or add personal opinions. Respond only with the summary.
+    Focus on extracting key legal concepts, actions, entities, and penalties.
+    DO NOT alter the legal meaning. Respond only with the summary.
 
     Legal Text Chunk:
     ---
@@ -20,52 +20,45 @@ LEGAL_SUMMARY_PROMPT = ChatPromptTemplate.from_template(
     ---
     """
 )
-
-# 2. 初始化大模型和输出解析器
-# 用 Llama 3.1 8B 就足够快且便宜，温度可以调低一点保证稳定性
-model = ChatGroq(temperature=0.2, model='llama-3.1-8b-instant')
+model = ChatGroq(
+    model='llama-3.1-8b-instant', 
+    temperature=0.1, # 降低温度，确保摘要稳定
+    max_retries=10,  # 🌟 关键防御：遇到限流自动重试，防止直接崩溃
+)
 output_parser = StrOutputParser()
-
-# 3. 构建我们的“总结链” (Summary Chain)
 summary_chain = LEGAL_SUMMARY_PROMPT | model | output_parser
 
-# 4. 【改造二】删除所有关于 Table 和 Image 的代码
-# 我们只处理文本，所以只需要一个列表来存总结结果
-text_summaries = []
-
-def generate_summaries():
-    """
-    批量处理所有文本 chunks，生成摘要。
-    """
-    print("🚀 开始为所有文本块生成核心摘要...")
-    
-    # 从新的 chunking.py 拿到数据
-    # 我们只关心 chunks 里的 page_content
-    chunks_to_summarize = [chunk.page_content for chunk in ck.chunks]
-    
-    if not chunks_to_summarize:
-        print("❌ 没有找到任何文本块来生成摘要。")
+def generate_summaries(chunks_list):
+    print(f"\n🚀 [Summary 模块] 接收到 {len(chunks_list)} 个文本块。")
+    if not chunks_list:
         return []
 
-    # 【改造三】使用 .batch() 进行批量并行处理，极大提升速度
-    try:
-        summaries = summary_chain.batch(
-            chunks_to_summarize, 
-            {"max_concurrency": 5} # 【可调参数】同时向 API 发送 5 个请求
-        )
-        print(f"🎉 成功生成了 {len(summaries)} 条摘要！")
-        return summaries
-    except Exception as e:
-        print(f"❌ 生成摘要时出错: {e}")
-        return []
+    texts_to_summarize = [chunk.page_content for chunk in chunks_list]
+    all_summaries =[]
+    
+    # 🌟 核心改造：分批次送去总结，防止内存溢出，并显示进度条！
+    batch_size = 50 # 每次送 500 个给 API
+    
+    print("⏳ 开始呼叫 Gemini API 进行批量总结 (预计需要 1-2 小时，请喝杯咖啡)...")
+    
+    # tqdm 会自动在终端生成一个非常漂亮的动态进度条 [██████████░░░] 80%
+    for i in tqdm(range(0, len(texts_to_summarize), batch_size), desc="生成摘要进度"):
+        
+        # 切割出当前批次的 500 个文本
+        current_batch_texts = texts_to_summarize[i : i + batch_size]
+        
+        try:
+            # 这一批次内部，依然保持 15 的高并发
+            batch_results = summary_chain.batch(
+                current_batch_texts, 
+                {"max_concurrency": 5} 
+            )
+            all_summaries.extend(batch_results)
+            
+        except Exception as e:
+            print(f"\n❌ 处理批次 {i} 到 {i+batch_size} 时出错: {e}")
+            # 如果出错，用空字符串占位，保证总数量不乱
+            all_summaries.extend(["[Error Summary]"] * len(current_batch_texts))
 
-# 主程序：调用函数并将结果存入变量，供下一步的 build_db.py 使用
-text_summaries = generate_summaries()
-
-# (可选) 测试一下，看看第一条摘要长什么样
-if __name__ == "__main__":
-    if text_summaries:
-        print("\n--- 第一条摘要预览 ---")
-        print(text_summaries[0])
-        print("\n--- 对应的原始文本块 ---")
-        print(ck.chunks[0].page_content[:300] + "...")
+    print(f"\n🎉 [Summary 模块] 成功生成了 {len(all_summaries)} 条摘要！")
+    return all_summaries
