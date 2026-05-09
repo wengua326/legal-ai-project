@@ -24,7 +24,7 @@ Our backend is not a simple LLM wrapper. It utilizes a state-of-the-art composit
 
 ---
 
-## 🌟 The 5 Pillars of MyLegal
+## 🌟 The 5 Features of MyLegal
 
 - 📚 **Legal Education:** Decodes Malaysian law using plain "Rojak" language.
 - ✊ **Labour Rights Advocate:** Analyzes disputes (e.g., unfair dismissal) and provides step-by-step guidance and official JTK office locations.
