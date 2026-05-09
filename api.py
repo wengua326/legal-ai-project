@@ -8,15 +8,15 @@ from dotenv import load_dotenv
 from PIL import Image
 from contextlib import asynccontextmanager 
 
-# 🌟 新增：用于在后端极速读取 PDF 文本
 from pypdf import PdfReader 
 
-# --- FastAPI 核心组件 ---
-from fastapi import FastAPI, HTTPException
+# --- FastAPI Core Components ---
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-# --- LangChain 核心组件 ---
+# --- LangChain Core Components ---
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, HarmCategory, HarmBlockThreshold
 from langchain_openai import ChatOpenAI
@@ -25,29 +25,28 @@ from langchain.agents import create_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.globals import set_debug
 
-# 导入你的自定义模块
 import embedding as emb
 from calculate import SolicitorsRemunerationCalculator, TenancyStampDutyCalculator, EmploymentTerminationCalculator
 
 load_dotenv()
 set_debug(True)
 
-# ================= 🌟 优化 2：消除频繁磁盘 I/O (内存缓存化) =================
+# ================= Optimization 2: Eliminate frequent Disk I/O (In-memory Caching) =================
 TEMPLATE_CACHE = {}
 GUIDELINES_CACHE = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 [Lifespan] 正在将法律模板和指南加载到内存缓存中...")
+    print("🚀 [Lifespan] Loading legal templates and guidelines into memory cache...")
     base_dir = os.path.dirname(os.path.abspath(__file__))
     
     try:
         guideline_path = os.path.join(base_dir, 'lod_guidelines.json')
         with open(guideline_path, 'r', encoding='utf-8') as f:
             GUIDELINES_CACHE.update(json.load(f))
-        print("✅ [Lifespan] 指南加载成功")
+        print("✅ [Lifespan] Guidelines loaded successfully.")
     except Exception as e:
-        print(f"❌ [Lifespan] 警告：无法加载 lod_guidelines.json: {e}")
+        print(f"❌ [Lifespan] Warning: Failed to load lod_guidelines.json: {e}")
 
     template_files = {'money': 'money.txt', 'defamation': 'defamation.txt', 'contract': 'contract.txt'}
     for key, filename in template_files.items():
@@ -55,18 +54,21 @@ async def lifespan(app: FastAPI):
             template_path = os.path.join(base_dir, 'templates', filename)
             with open(template_path, 'r', encoding='utf-8') as f:
                 TEMPLATE_CACHE[key] = f.read()
-            print(f"✅ [Lifespan] 模板 '{key}' 加载成功")
+            print(f"✅ [Lifespan] Template '{key}' loaded successfully.")
         except Exception as e:
-            print(f"❌ [Lifespan] 警告：无法加载模板 {filename}: {e}")
+            print(f"❌ [Lifespan] Warning: Failed to load template {filename}: {e}")
             
     yield 
     
-    print("🛑 [Lifespan] 服务器正在关闭，清理资源...")
+    print("🛑 [Lifespan] Server is shutting down, clearing resources...")
     TEMPLATE_CACHE.clear()
     GUIDELINES_CACHE.clear()
 
-# ================= 1. 初始化 FastAPI =================
-app = FastAPI(title="MyLegal API", description="马来西亚法律智能体后端", lifespan=lifespan)
+# ================= 1. Initialize FastAPI =================
+app = FastAPI(title="MyLegal API", description="Malaysian Legal AI Agent Backend", lifespan=lifespan)
+
+#  New: Enable GZip compression to handle massive Base64 strings
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,7 +78,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ================= 2. 定义数据格式 (Pydantic) =================
+# ================= 2. Define Data Models (Pydantic) =================
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -84,11 +86,10 @@ class ChatMessage(BaseModel):
 class LegalRequest(BaseModel):
     prompt: str
     history: List[ChatMessage] = []
-    # 🌟 核心修改：将原来的 image_base64 泛化为 file_base64，并增加 file_type 字段
     file_base64: Optional[str] = None  
-    file_type: Optional[str] = None # 例如: "image/jpeg", "image/png", "application/pdf"
+    file_type: Optional[str] = None 
 
-# ================= 3. 模型初始化 =================
+# ================= 3. Model Initialization =================
 vision_model = ChatGoogleGenerativeAI(model='gemini-2.5-flash', temperature=0)
 
 reasoning_model = ChatOpenAI(
@@ -98,15 +99,15 @@ reasoning_model = ChatOpenAI(
     temperature=0
 )
 
-# ================= 4. 工具定义区 =================
+# ================= 4. Tools Definition =================
 
 @tool
 def search_pdf_database(query: str) -> list:
-    """检索大马法律法典、判例和法庭规则。只要涉及法律问题，必须先查这里！"""
+    """Retrieve data from the Malaysian legal statutes, case laws, and court procedures database. This tool must be used first for any legal inquiries!"""
     try:
         base_docs = emb.base_retriever.invoke(query)
     except Exception as e:
-        return [{"type": "text", "text": f"数据库检索失败: {str(e)}"}]
+        return [{"type": "text", "text": f"Database retrieval failed: {str(e)}"}]
     
     unfrozen_docs = []
     for doc in base_docs:
@@ -120,13 +121,13 @@ def search_pdf_database(query: str) -> list:
             unfrozen_docs.append(doc)
             
     if not unfrozen_docs:
-        return [{"type": "text", "text": "检索完成，但未能成功解析法条数据。"}]
+        return [{"type": "text", "text": "Retrieval completed, but failed to parse statutory data."}]
     
     try:
         reranker = emb.compressor 
         reranked_docs = reranker.compress_documents(documents=unfrozen_docs, query=query)
     except Exception as e:
-        print(f"[Rerank 警告] 精排失败: {e}")
+        print(f"[Rerank Warning] Fine-ranking failed: {e}")
         reranked_docs = unfrozen_docs
         
     final_docs = reranked_docs[:5]
@@ -134,18 +135,18 @@ def search_pdf_database(query: str) -> list:
     for element in final_docs:
         text_val = element.page_content if hasattr(element, 'page_content') else str(element)
         
-        source_name = "本地法律库"
+        source_name = "Local Legal Database"
         if hasattr(element, 'metadata') and isinstance(element.metadata, dict):
-            source_name = element.metadata.get('source_document', element.metadata.get('source', '本地法律库'))
+            source_name = element.metadata.get('source_document', element.metadata.get('source', 'Local Legal Database'))
             
-        text_list.append(f"【来源: {source_name}】\n{text_val}")
+        text_list.append(f"[Source: {source_name}]\n{text_val}")
                 
-    context_text = '\n\n'.join(text_list) if text_list else "未在本地数据库找到相关法律依据。"
-    return [{"type": "text", "text": f"检索到的法条：\n{context_text}"}]
+    context_text = '\n\n'.join(text_list) if text_list else "No relevant legal basis found in the local database."
+    return [{"type": "text", "text": f"Retrieved Legal Provisions:\n{context_text}"}]
 
 @tool
 def search_malaysia_internet(query: str) -> str:
-    """仅当本地库找不到信息时，通过大马政府官方网站查询最新政策、地址或公告。"""
+    """Use this tool to search official Malaysian government websites for the latest policies, specific addresses, or official announcements ONLY when the local database lacks such information."""
     official_domains = [
         "https://agc.gov.my", "https://mohr.gov.my", "https://malaysianbar.org.my",
         "https://hasil.gov.my", "https://kehakiman.gov.my", "https://smeinfo.com.my", 
@@ -156,74 +157,74 @@ def search_malaysia_internet(query: str) -> str:
 
 @tool
 def legal_fee_calculator(task_type: str, amount: float, extra_param: float = 0.0) -> str:
-    """专门用于计算大马法定费用。task_type: 'lawyer_fee_A', 'stamp_duty', 'termination'"""
+    """Dedicated calculator for Malaysian statutory fees. Absolutely precise; manual estimation is prohibited. task_type must be: 'lawyer_fee_A' (conveyancing), 'stamp_duty' (tenancy agreement), or 'termination' (severance pay)."""
     try:
         if task_type == 'lawyer_fee_A':
             fee = SolicitorsRemunerationCalculator.calculate_table_a(amount)
-            return f"[计算结果] RM{amount:,.2f} 房产标准律师费: RM{fee:,.2f}"
+            return f"[Calculation Result] Standard legal fee for property valued at RM{amount:,.2f}: RM{fee:,.2f}"
         elif task_type == 'stamp_duty':
             duty = TenancyStampDutyCalculator.calculate(amount, extra_param)
-            return f"[计算结果] 月租 RM{amount:,.2f}，租期 {extra_param} 年的印花税: RM{duty:,.2f}"
+            return f"[Calculation Result] Stamp duty for monthly rent RM{amount:,.2f} over a {extra_param}-year tenancy: RM{duty:,.2f}"
         elif task_type == 'termination':
             benefit = EmploymentTerminationCalculator.calculate(amount, extra_param)
-            return f"[计算结果] 月薪 RM{amount:,.2f}，服务 {extra_param} 年的遣散费: RM{benefit:,.2f}"
-        return "未知的任务类型。"
+            return f"[Calculation Result] Termination benefit for monthly salary RM{amount:,.2f} and {extra_param} years of service: RM{benefit:,.2f}"
+        return "Unknown task type."
     except Exception as e:
-        return f"计算错误: {str(e)}"
+        return f"Calculation Error: {str(e)}"
 
 @tool
 def fetch_legal_template(template_type: str) -> str:
-    """当用户要求起草信件(LOD)时调用。template_type: 'money', 'defamation', 'contract'。"""
-    file_map = {'money': 'money.txt', 'defamation': 'defamation.txt', 'contract': 'contract.txt'}
-    target_file = file_map.get(template_type)
-    if not target_file: return "系统未找到对应模板，请凭借大马法律知识自行起草。"
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    try:
-        guideline_path = os.path.join(base_dir, 'lod_guidelines.json')
-        with open(guideline_path, 'r', encoding='utf-8') as f: guidelines_data = json.load(f)
-        constraints = "\n- ".join(guidelines_data['system_instructions']['absolute_constraints'])
-        blueprint = "\n- ".join([f"Step {item['step']} ({item['element']}): {item['requirements']}" for item in guidelines_data['system_instructions']['lod_blueprint']])
+    """Invoke this tool when the user requests drafting a formal letter (e.g., LOD). template_type must be: 'money' (debt recovery/unpaid wages), 'defamation' (cease and desist), or 'contract' (breach of contract)."""
+    # 1. Retrieve template from memory cache
+    template_content = TEMPLATE_CACHE.get(template_type)
+    if not template_content:
+        return f"System could not find a template for '{template_type}'. Available in cache: {list(TEMPLATE_CACHE.keys())}"
+    
+    # 2. Retrieve guidelines from memory cache
+    if not GUIDELINES_CACHE:
+        return "System could not find guideline configurations (GUIDELINES_CACHE is empty)."
         
-        template_path = os.path.join(base_dir, 'templates', target_file)
-        with open(template_path, 'r', encoding='utf-8') as f: template_content = f.read()
+    try:
+        constraints = "\n- ".join(GUIDELINES_CACHE['system_instructions']['absolute_constraints'])
+        blueprint = "\n- ".join([f"Step {item['step']} ({item['element']}): {item['requirements']}" for item in GUIDELINES_CACHE['system_instructions']['lod_blueprint']])
 
-        return f"【起草要求】:\n{constraints}\n【结构规范】:\n{blueprint}\n【参考模板】:\n---\n{template_content}\n---"
+        return f"[Drafting Requirements (Must Comply)]:\n{constraints}\n[Structural Blueprint]:\n{blueprint}\n[Reference Template]:\n---\n{template_content}\n---"
     except Exception as e:
-        return f"读取文件失败: {str(e)}"
+        return f"Failed to assemble template, please check JSON structure: {str(e)}"
 
-
-# ================= 5. 核心改造：动态 Agent 路由工厂 =================
+# ================= 5. Core Refactoring: Dynamic Agent Routing Factory =================
 
 def get_dynamic_agent(mode: str):
-    """根据前端传来的暗号，动态卸载/挂载武器，并分配最强 Prompt"""
+    """Dynamically mount/unmount tools and assign the strongest Prompt based on frontend routing signals."""
     orchestrator_llm = ChatGoogleGenerativeAI(
         model='gemini-3.1-pro-preview', temperature=0, 
         safety_settings={HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE}
     )
 
+    
     if mode == "education":
         active_tools = [search_pdf_database]
-        sys_prompt = "你是大马普法向导。你【只能】使用 search_pdf_database 检索法条。严禁起草文书，严禁使用计算器，严禁上网。只需提取客观法律事实输出 Fact Memo。"
+        sys_prompt = "You are a Malaysian Legal Education Guide. You MUST ONLY use 'search_pdf_database' to retrieve statutes. Drafting documents, using the calculator, or browsing the internet is STRICTLY PROHIBITED. Extract objective legal facts and output a detailed Fact Memo in ENGLISH."
         
     elif mode == "labour":
         active_tools = [search_pdf_database, search_malaysia_internet]
-        sys_prompt = "你是劳工维权向导。你必须先用 search_pdf_database 查法条，如果需要找劳工部或法庭地址，调用 search_malaysia_internet。整理包含法条依据和维权地址的 Fact Memo。"
+        sys_prompt = "You are a Labour Rights Advocate. You MUST first use 'search_pdf_database' for statutes. If addresses for the Labour Department or courts are needed, use 'search_malaysia_internet'. Compile a Fact Memo in ENGLISH containing legal basis and action addresses."
         
     elif mode == "contract":
         active_tools = [search_pdf_database]
-        sys_prompt = "你是合同审计员。根据用户提供的合同内容，严密比对 search_pdf_database 中的法条，找出霸王条款。整理 Fact Memo。"
+        sys_prompt = "You are a Contract Auditor. Rigorously cross-reference the user-provided contract text with statutes from 'search_pdf_database' to identify predatory or unfair clauses. Compile a Fact Memo in ENGLISH."
         
     elif mode == "lod":
         active_tools = [search_pdf_database, fetch_legal_template]
-        sys_prompt = "你是文书起草助理。你【必须】调用 fetch_legal_template 获取模板，并用 search_pdf_database 核实法律依据。将模板和法条整理成 Fact Memo 交给大律师。如果用户提问无关律师信的事务请拒绝回答，并表示只能处理律师信事务。"
+        sys_prompt = "You are a Legal Drafting Assistant. You MUST call 'fetch_legal_template' to obtain the drafting template, and verify the legal basis using 'search_pdf_database'. Compile the template and statutes into a Fact Memo in ENGLISH for the Senior Lawyer. If the user asks non-drafting questions, decline."
         
     elif mode == "calculator":
         active_tools = [legal_fee_calculator, search_pdf_database]
-        sys_prompt = "你是法定费用核算员。你【绝对禁止】自己口算！必须从用户输入提取数字，调用 legal_fee_calculator。将计算结果整理成 Fact Memo。如果用户提问无关计算的事务请拒绝回答,并表示只能处理计算事务。"
+        sys_prompt = "You are a Statutory Fee Calculator. You are ABSOLUTELY PROHIBITED from estimating amounts manually! You must extract figures from the user input and invoke 'legal_fee_calculator'. Compile the results into a Fact Memo in ENGLISH. Decline non-calculation inquiries."
         
     else:
         active_tools = [search_pdf_database, search_malaysia_internet, legal_fee_calculator, fetch_legal_template]
-        sys_prompt = "你是一个全能的大马法律资料搜查官 (Orchestrator)。根据问题选择合适的工具，整理 Fact Memo 输出交给大律师处理。"
+        sys_prompt = "You are a versatile Malaysian Legal Orchestrator. Select appropriate tools based on the user's query and compile all objective facts into a detailed Fact Memo in ENGLISH for the Senior Lawyer to process."
 
     return create_agent(
         model=orchestrator_llm, 
@@ -231,83 +232,80 @@ def get_dynamic_agent(mode: str):
         system_prompt=sys_prompt
     )
 
-# ================= 6. 核心 API 路由 =================
+# ================= 6. Core API Routing =================
 
 @app.post("/api/chat")
 def chat_handler(req: LegalRequest):
-    print(f"\n[🚨 前端发来的请求] --->\n{req.prompt}\n<--- [请求结束]\n")
+    print(f"\n[🚨 Request Received from Frontend] --->\n{req.prompt}\n<--- [Request End]\n")
     try:
         current_prompt = req.prompt
         
-        # 🕵️‍♂️ 拦截前端暗号，决定模式！
         current_mode = "default"
         clean_prompt = current_prompt
         
-        if "普法教育模式" in current_prompt:
+        
+        if "Legal Education Mode" in current_prompt:
             current_mode = "education"
-        elif "劳工维权模式" in current_prompt:
+        elif "Labour Rights Mode" in current_prompt:
             current_mode = "labour"
-        elif "合同审计模式" in current_prompt:
+        elif "Contract Audit Mode" in current_prompt:
             current_mode = "contract"
-        elif "文书起草模式" in current_prompt:
+        elif "Document Drafting Mode" in current_prompt:
             current_mode = "lod"
-        elif "费用计算模式" in current_prompt:
+        elif "Fee Calculation Mode" in current_prompt:
             current_mode = "calculator"
 
-        print(f"🎯 侦测到前端频道路由: [{current_mode.upper()}]")
+        print(f"🎯 Frontend Channel Routing Detected: [{current_mode.upper()}]")
         
         my_agent = get_dynamic_agent(current_mode)
-        enhanced_prompt = clean_prompt
+        attachment_text = ""
         
-        # --- 🌟 阶段一：感知层 (图片/PDF 双擎处理) 🌟 ---
+        # --- Stage 1: Perception Layer (Image / PDF Dual Engine) ---
         if req.file_base64:
             pure_base64 = req.file_base64.split(",")[-1]
+            pure_base64 += "=" * ((4 - len(pure_base64) % 4) % 4)
             file_mime_type = req.file_type.lower() if req.file_type else ""
-            extracted_facts = ""
 
-            # 逻辑 A: 如果前端明确传过来的是 PDF 文件
             if "pdf" in file_mime_type:
-                print("📄 检测到用户上传了 PDF 文件，正在本地极速解析...")
+                print(" PDF file uploaded. Initiating rapid local parsing...")
                 try:
                     pdf_bytes = base64.b64decode(pure_base64)
                     pdf_file = io.BytesIO(pdf_bytes)
                     reader = PdfReader(pdf_file)
                     
                     pdf_text = ""
-                    # 限制最多只读前 10 页，防止超大 PDF 撑爆内存
                     num_pages = min(10, len(reader.pages))
                     for i in range(num_pages):
                         extracted = reader.pages[i].extract_text()
                         if extracted:
                             pdf_text += extracted + "\n"
                             
-                    extracted_facts = f"[PDF 文本提取成功 (截取前 {num_pages} 页)]:\n{pdf_text}"
-                    print("✅ PDF 文本提取完成。")
+                    attachment_text = f"[PDF Text Extracted Successfully (First {num_pages} pages)]:\n{pdf_text}"
+                    print("✅ PDF text extraction complete.")
                 except Exception as e:
-                    print(f"❌ PDF 读取失败: {e}")
-                    extracted_facts = "[读取文件失败，可能文件已损坏或加密]"
+                    print(f"❌ PDF reading failed: {e}")
+                    attachment_text = "[Failed to read file, it may be corrupted or encrypted]"
             
-            # 逻辑 B: 如果是图片，依然使用强大的 Gemini Vision 模型
             elif "image" in file_mime_type or file_mime_type == "":
-                print("📸 检测到用户上传了图片，正在呼叫 Gemini Vision 模型...")
+                print("📸 Image uploaded. Calling Gemini Vision Model...")
                 try:
                     vision_msg = HumanMessage(content=[
-                        {"type": "text", "text": "提取图片中的所有文本事实，特别是涉及金额、日期、条款的内容。"},
+                        {"type": "text", "text": "Extract all factual text from the image, especially regarding amounts, dates, and terms."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{pure_base64}"}}
                     ])
                     vision_res = vision_model.invoke([vision_msg])
-                    extracted_facts = f"[图片文本提取成功]:\n{vision_res.content}"
-                    print("✅ 图片证据提取完成。")
+                    attachment_text = f"[Image Text Extracted Successfully]:\n{vision_res.content}"
+                    print("✅ Image evidence extraction complete.")
                 except Exception as e:
-                    print(f"❌ Gemini Vision 解析失败: {e}")
-                    extracted_facts = "[读取图片失败，请重试]"
+                    print(f"❌ Gemini Vision parsing failed: {e}")
+                    attachment_text = "[Failed to read image, please retry]"
 
-            # 将提取出的内容（无论是 PDF 还是图片）注入给后方的法律大脑
-            enhanced_prompt = f"用户原始问题: {clean_prompt}\n\n[用户上传附件的内容]:\n{extracted_facts}"
+            # Inject extracted content into the prompt
+            clean_prompt = f"User's Original Query: {clean_prompt}\n\n[Content of Uploaded Attachment]:\n{attachment_text}"
 
-        # --- 阶段二 & 三：主脑路由与检索 ---
+        # --- Stage 2 & 3: Orchestrator Routing & Retrieval ---
         history_msgs = [{"role": m.role, "content": m.content} for m in req.history][-6:] 
-        temp_messages = history_msgs +[{"role": "user", "content": enhanced_prompt}]
+        temp_messages = history_msgs + [{"role": "user", "content": clean_prompt}]
         
         agent_result = my_agent.invoke({"messages": temp_messages})
         raw_content = agent_result["messages"][-1].content
@@ -320,18 +318,31 @@ def chat_handler(req: LegalRequest):
         investigation_report = investigation_report.replace("\\n", "\n").split("', 'extras': {")[0]
         if investigation_report.startswith("('"): investigation_report = investigation_report[2:]
 
-        # --- 阶段四：深度推理与生成 (DeepSeek R1) ---
-        final_reasoning_prompt = f"""
-        你是 MyLegal 资深大马律师。
-        当前所处模式：{current_mode}
-        【用户的问题】: {enhanced_prompt}
-        【调查员搜集到的资料】: \n{investigation_report}
+        # --- Stage 4: Deep Reasoning & Generation (DeepSeek R1) ---
         
-        【任务】:
-        1. 如果是普法模式，必须声明"本内容仅供教育参考，不构成专业法律建议"。
-        2. 如果是文书起草模式,必须根据调查员提供的【参考模板】和guidelines生成信件草稿,不要进行过度修改。
-        3. 如果是维权模式，除了法律推演，还要给出清晰步骤（并附上机构地址）。
-        4. 请基于事实严密推演并引用法条出处。用大马人易懂的口吻回答。
+        
+        final_reasoning_prompt = f"""
+        You are a Senior Malaysian Legal Counsel for MyLegal.
+        CURRENT OPERATIONAL MODE: {current_mode.upper()}
+        
+        [USER'S QUERY]: 
+        {clean_prompt}
+        """
+        
+        if attachment_text:
+            final_reasoning_prompt += f"\n[USER'S UPLOADED ATTACHMENT/EVIDENCE]: \n{attachment_text}\n\n"
+            
+        final_reasoning_prompt += f"""
+        [FACTS & STATUTES GATHERED BY ORCHESTRATOR]: \n{investigation_report}
+        
+        [STRICT TASKS & FORMATTING RULES]:
+        1. LANGUAGE ENFORCEMENT: You MUST respond in the EXACT SAME language the user used in their query (e.g., if the user asks in English, reply in English; if in Malay, reply in Bahasa Malaysia).
+        2. LOD DRAFTING EXCEPTION: If in Document Drafting Mode (LOD), the drafted letter MUST ALWAYS be in formal English or Bahasa Malaysia, regardless of the user's input language.
+        3. NO CONVERSATIONAL FILLERS: DO NOT output phrases like "Certainly," "Here is the letter," "Understood," or any greeting/closing remarks. Your output must begin IMMEDIATELY with the requested legal content or document draft.
+        4. If in Education Mode, conclude with: "This content is for educational purposes only and does not constitute professional legal advice."
+        5. If in Labour Rights Mode, provide clear actionable steps and append relevant institutional addresses based on the facts gathered.
+        6. If in Contract Audit Mode, directly analyze the clauses in the [User's Uploaded Attachment/Evidence] against the law to identify predatory terms.
+        7. Base your deductions strictly on facts and cite relevant statutory sources.
         """
         
         r1_response = reasoning_model.invoke(final_reasoning_prompt)
@@ -343,9 +354,17 @@ def chat_handler(req: LegalRequest):
         }
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=8000,
+        limit_concurrency=1000, 
+        limit_max_requests=10000,
+        h11_max_incomplete_event_size=52428800
+    )
