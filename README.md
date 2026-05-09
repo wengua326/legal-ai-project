@@ -6,7 +6,7 @@ MyLegal empowers Malaysian gig workers and MSMEs by democratizing access to just
 
 ## 🚀 Live Demo & Links
 - **Web App (Vercel):** [https://mylegal-assistant.vercel.app/]
-- **Demo Video (YouTube):** [Watch our 2-min Pitch]
+- **Demo Video (ScreenApp):** [https://screenapp.io/app/v/xGF4LT_XxO]
 - **Backend API (Hugging Face):** [https://huggingface.co/spaces/wenguan326/mylegal-api]
 - **Frontend Repo (Vercel):** [https://github.com/Elvis071217/Lexibot_project]
 
