@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, HarmCategory, HarmBlo
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
-from tqdm import tqdm  
+from tqdm import tqdm 
 
 load_dotenv()
 
@@ -29,26 +29,25 @@ output_parser = StrOutputParser()
 summary_chain = LEGAL_SUMMARY_PROMPT | model | output_parser
 
 def generate_summaries(chunks_list):
-    print(f"\n🚀 [Summary 模块] 接收到 {len(chunks_list)} 个文本块。")
+    print(f"\n🚀 [Summary Module] Received {len(chunks_list)} text chunks.")
     if not chunks_list:
         return []
 
     texts_to_summarize = [chunk.page_content for chunk in chunks_list]
     all_summaries =[]
     
+    batch_size = 50 # Send 50 chunks to the API per batch
     
-    batch_size = 50 
+    print("Starting batch summarization...")
     
-    print("Start Summarising...")
-    
-    
-    for i in tqdm(range(0, len(texts_to_summarize), batch_size), desc="生成摘要进度"):
+    # tqdm will automatically generate a dynamic progress bar in the terminal
+    for i in tqdm(range(0, len(texts_to_summarize), batch_size), desc="Summary Generation Progress"):
         
-        
+        # Slice out the current batch of texts
         current_batch_texts = texts_to_summarize[i : i + batch_size]
         
         try:
-            
+            # Within this batch, maintain a high concurrency of 5
             batch_results = summary_chain.batch(
                 current_batch_texts, 
                 {"max_concurrency": 5} 
@@ -56,9 +55,8 @@ def generate_summaries(chunks_list):
             all_summaries.extend(batch_results)
             
         except Exception as e:
-            print(f"\n❌ 处理批次 {i} 到 {i+batch_size} 时出错: {e}")
-            
+            print(f"\n❌ Error processing batch {i} to {i+batch_size}: {e}")
             all_summaries.extend(["[Error Summary]"] * len(current_batch_texts))
 
-    print(f"\n🎉 [Summary 模块] 成功生成了 {len(all_summaries)} 条摘要！")
+    print(f"\n🎉 [Summary Module] Successfully generated {len(all_summaries)} summaries!")
     return all_summaries
