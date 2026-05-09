@@ -2,7 +2,7 @@ import math
 import json
 
 class SolicitorsRemunerationCalculator:
-    """律师费报酬计算器 (SRO 2023)"""
+    """Solicitors' Remuneration Calculator (SRO 2023)"""
     
     @staticmethod
     def calculate_table_a(property_value: float) -> float:
@@ -11,22 +11,22 @@ class SolicitorsRemunerationCalculator:
             return 0.0
             
         fee = 0.0
-        # 第一阶梯: 首 500,000 (1.25%)
+        # Tier 1: First 500,000 (1.25%)
         tier_1_value = min(property_value, 500000)
         fee += tier_1_value * 0.0125
         
-        # 第二阶梯: 接下来 7,000,000 (500,000.01 - 7,500,000) (1.00%)
+        # Tier 2: Next 7,000,000 (500,000.01 - 7,500,000) (1.00%)
         if property_value > 500000:
             tier_2_value = min(property_value - 500000, 7000000)
             fee += tier_2_value * 0.01
             
-        # 第三阶梯: 超过 7,500,000 (最高 1.00%，可协商，这里按最高值计算以做预算)
+        # Tier 3: Exceeding 7,500,000 (Maximum 1.00%, negotiable, calculated at the maximum rate here for budgeting)
         if property_value > 7500000:
             tier_3_value = property_value - 7500000
             fee += tier_3_value * 0.01 
-            print(f"注意: 超过 RM7,500,000 的部分律师费可协商，此处按最高 1% 计算。")
+            print(f"Note: Legal fees for the portion exceeding RM7,500,000 are negotiable. Calculated at the maximum 1% here.")
             
-        return max(fee, 500.0) # 最低收费 RM500
+        return max(fee, 500.0) # Minimum fee RM500
 
     @staticmethod
     def calculate_table_b(property_value: float) -> float:
@@ -34,9 +34,9 @@ class SolicitorsRemunerationCalculator:
         if property_value <= 0:
             return 0.0
             
-        # 根据档位确定 Table A 的折扣比例
+        # Determine the discount percentage for Table A based on the value tier
         if property_value <= 50000:
-            return 500.0 # 固定收费
+            return 500.0 # Flat fee
         elif property_value <= 250000:
             percentage = 0.75
         elif property_value <= 500000:
@@ -49,11 +49,11 @@ class SolicitorsRemunerationCalculator:
         table_a_fee = SolicitorsRemunerationCalculator.calculate_table_a(property_value)
         discounted_fee = table_a_fee * percentage
         
-        return max(discounted_fee, 500.0) # 最低收费 RM500
+        return max(discounted_fee, 500.0) # Minimum fee RM500
 
 
 class TenancyStampDutyCalculator:
-    """租约印花税计算器 (基于 2026 年新规)"""
+    """Tenancy Stamp Duty Calculator (Based on 2026 new regulations)"""
     
     BASE_UNIT = 250
     FLAT_FEE_EXTRA_COPY = 10
@@ -61,13 +61,13 @@ class TenancyStampDutyCalculator:
     @staticmethod
     def calculate(monthly_rental: float, duration_years: float, extra_copies: int = 0) -> float:
         annual_rental = monthly_rental * 12
-        # 2026年起取消 RM2400 豁免额度
+        # RM2,400 exemption limit is abolished starting from 2026
         taxable_rental = annual_rental 
         
-        # 向上取整至最近的 250
+        # Round up to the nearest 250
         calculation_units = math.ceil(taxable_rental / TenancyStampDutyCalculator.BASE_UNIT)
         
-        # 决定费率倍数
+        # Determine the rate multiplier based on duration
         if duration_years <= 1:
             rate_per_unit = 1
         elif duration_years <= 3:
@@ -84,7 +84,7 @@ class TenancyStampDutyCalculator:
 
 
 class TenancyAdminFeeCalculator:
-    """租约管理费计算器"""
+    """Tenancy Administration Fee Calculator"""
     
     @staticmethod
     def calculate(monthly_rental: float) -> float:
@@ -101,14 +101,14 @@ class TenancyAdminFeeCalculator:
 
 
 class EmploymentTerminationCalculator:
-    """员工解雇福利计算器"""
+    """Employment Termination Benefits Calculator"""
     
     @staticmethod
     def calculate(monthly_salary: float, service_years: float) -> float:
-        # 计算日薪 (全年薪水 / 365)
+        # Calculate daily wage (Annual salary / 365)
         daily_wage = (monthly_salary * 12) / 365
         
-        # 根据服务年限决定每年补偿天数
+        # Determine the number of compensation days per year based on years of service
         if service_years < 2:
             days_per_year = 10
         elif service_years < 5:
@@ -116,36 +116,35 @@ class EmploymentTerminationCalculator:
         else:
             days_per_year = 20
             
-        # 计算总福利金额
+        # Calculate total benefit amount
         total_benefit = daily_wage * service_years * days_per_year
         return round(total_benefit, 2)
 
 
-# ==========================================
-# 测试与使用示例 (Usage Examples)
+# Testing and Usage Examples
 # ==========================================
 if __name__ == "__main__":
-    print("--- 1. 律师费计算测试 (SRO 2023) ---")
+    print("--- 1. Solicitors' Remuneration Calculation Test (SRO 2023) ---")
     property_val = 800000
-    print(f"RM {property_val:,.2f} 房产的标准律师费 (Table A): RM {SolicitorsRemunerationCalculator.calculate_table_a(property_val):,.2f}")
-    print(f"RM {property_val:,.2f} 房产的发展商项目律师费 (Table B): RM {SolicitorsRemunerationCalculator.calculate_table_b(property_val):,.2f}")
+    print(f"Standard legal fee for RM {property_val:,.2f} property (Table A): RM {SolicitorsRemunerationCalculator.calculate_table_a(property_val):,.2f}")
+    print(f"HDA transaction legal fee for RM {property_val:,.2f} property (Table B): RM {SolicitorsRemunerationCalculator.calculate_table_b(property_val):,.2f}")
     print()
     
-    print("--- 2. 租约印花税测试 (2026新规) ---")
+    print("--- 2. Tenancy Stamp Duty Test (2026 New Regulations) ---")
     rent = 2500
     duration = 2.5
     copies = 2
     duty = TenancyStampDutyCalculator.calculate(rent, duration, copies)
-    print(f"月租 RM {rent}, 租期 {duration} 年, {copies} 份副本 -> 印花税总额: RM {duty:,.2f}")
+    print(f"Monthly rent RM {rent}, duration {duration} years, {copies} extra copies -> Total Stamp Duty: RM {duty:,.2f}")
     print()
     
-    print("--- 3. 租约管理费测试 ---")
+    print("--- 3. Tenancy Administration Fee Test ---")
     rent_admin = 2500
-    print(f"月租 RM {rent_admin} 的管理费为: RM {TenancyAdminFeeCalculator.calculate(rent_admin):,.2f}")
+    print(f"Administration fee for monthly rent RM {rent_admin} is: RM {TenancyAdminFeeCalculator.calculate(rent_admin):,.2f}")
     print()
     
-    print("--- 4. 员工解雇福利测试 ---")
+    print("--- 4. Employment Termination Benefit Test ---")
     salary = 5000
     years = 3.5
     benefit = EmploymentTerminationCalculator.calculate(salary, years)
-    print(f"月薪 RM {salary}, 服务 {years} 年 -> 解雇福利赔偿: RM {benefit:,.2f}")
+    print(f"Monthly salary RM {salary}, {years} years of service -> Termination Benefit Compensation: RM {benefit:,.2f}")
