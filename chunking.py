@@ -1,3 +1,5 @@
+--- START OF FILE test132.py ---
+
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -13,12 +15,12 @@ text_splitter = RecursiveCharacterTextSplitter(
 def create_chunks_from_folder():
     all_chunks =[] 
     
-    print(f"🚀 开始从 {CLEAN_TXT_FOLDER} 文件夹读取干净文本并进行切块...")
+    print(f"🚀 Starting to read clean text from the {CLEAN_TXT_FOLDER} folder and perform chunking...")
     
     txt_files = [f for f in os.listdir(CLEAN_TXT_FOLDER) if f.endswith('.txt')]
     
     if not txt_files:
-        print("❌ 没有找到干净的 TXT 文件！")
+        print("❌ No clean TXT files found!")
         return[]
 
     for filename in txt_files:
@@ -35,9 +37,7 @@ def create_chunks_from_folder():
             all_chunks.extend(file_chunks) 
             
         except Exception as e:
-            print(f"❌ 读取或切块 {filename} 失败，错误信息: {e}")
+            print(f"❌ Failed to read or chunk {filename}. Error: {e}")
             
-    print(f"🎉 所有 TXT 文件处理完毕！总共生成了 {len(all_chunks)} 个知识块。")
+    print(f"🎉 All TXT files processed successfully! Generated a total of {len(all_chunks)} knowledge chunks.")
     return all_chunks
-
-# ✂️ 【修改点】：删除了底部的 chunks = create_chunks_from_folder()，防止 import 时自动运行
