@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, HarmCategory, HarmBlo
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
-from tqdm import tqdm  # 🌟 引入进度条神器
+from tqdm import tqdm  
 
 load_dotenv()
 
@@ -22,8 +22,8 @@ LEGAL_SUMMARY_PROMPT = ChatPromptTemplate.from_template(
 )
 model = ChatGroq(
     model='llama-3.1-8b-instant', 
-    temperature=0.1, # 降低温度，确保摘要稳定
-    max_retries=10,  # 🌟 关键防御：遇到限流自动重试，防止直接崩溃
+    temperature=0.1, 
+    max_retries=10,  
 )
 output_parser = StrOutputParser()
 summary_chain = LEGAL_SUMMARY_PROMPT | model | output_parser
@@ -36,19 +36,19 @@ def generate_summaries(chunks_list):
     texts_to_summarize = [chunk.page_content for chunk in chunks_list]
     all_summaries =[]
     
-    # 🌟 核心改造：分批次送去总结，防止内存溢出，并显示进度条！
-    batch_size = 50 # 每次送 500 个给 API
     
-    print("⏳ 开始呼叫 Gemini API 进行批量总结 (预计需要 1-2 小时，请喝杯咖啡)...")
+    batch_size = 50 
     
-    # tqdm 会自动在终端生成一个非常漂亮的动态进度条 [██████████░░░] 80%
+    print("Start Summarising...")
+    
+    
     for i in tqdm(range(0, len(texts_to_summarize), batch_size), desc="生成摘要进度"):
         
-        # 切割出当前批次的 500 个文本
+        
         current_batch_texts = texts_to_summarize[i : i + batch_size]
         
         try:
-            # 这一批次内部，依然保持 15 的高并发
+            
             batch_results = summary_chain.batch(
                 current_batch_texts, 
                 {"max_concurrency": 5} 
@@ -57,7 +57,7 @@ def generate_summaries(chunks_list):
             
         except Exception as e:
             print(f"\n❌ 处理批次 {i} 到 {i+batch_size} 时出错: {e}")
-            # 如果出错，用空字符串占位，保证总数量不乱
+            
             all_summaries.extend(["[Error Summary]"] * len(current_batch_texts))
 
     print(f"\n🎉 [Summary 模块] 成功生成了 {len(all_summaries)} 条摘要！")
